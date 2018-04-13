@@ -7,10 +7,7 @@ import ij.ImagePlus;
 import ij.ImageStack;
 import ij.Prefs;
 import ij.WindowManager;
-import ij.gui.GenericDialog;
-import ij.gui.ImageWindow;
-import ij.gui.Roi;
-import ij.gui.StackWindow;
+import ij.gui.*;
 import ij.io.DirectoryChooser;
 import ij.io.OpenDialog;
 import ij.io.SaveDialog;
@@ -53,15 +50,12 @@ import java.awt.event.MouseWheelListener;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.awt.event.WindowListener;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.FilenameFilter;
-import java.io.ObjectOutputStream;
-import java.io.OutputStream;
+import java.io.*;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
+import java.util.Scanner;
 import java.util.Vector;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -174,6 +168,12 @@ public class Weka_Segmentation implements PlugIn
 	private JButton wekaButton = null;
 	/** create new class button */
 	private JButton addClassButton = null;
+
+	//@author ALEXIS BARLTROP
+	/** create load Region of Interest button */
+	private JButton loadROIButton = null;
+
+	public final JFileChooser fc = new JFileChooser();
 
 	/** array of roi list overlays to paint the transparent rois of each class */
 	private RoiListOverlay [] roiOverlay = null;
@@ -297,7 +297,7 @@ public class Weka_Segmentation implements PlugIn
 
 		roiOverlay = new RoiListOverlay[WekaSegmentation.MAX_NUM_CLASSES];
 		
-		trainButton = new JButton("Train classifier");
+		trainButton = new JButton("Train Corgis");
 		trainButton.setToolTipText("Start training the classifier");
 
 		overlayButton = new JButton("Toggle overlay");
@@ -344,6 +344,10 @@ public class Weka_Segmentation implements PlugIn
 		ImageIcon icon = new ImageIcon(Weka_Segmentation.class.getResource("/trainableSegmentation/images/weka.png"));
 		wekaButton = new JButton( icon );
 		wekaButton.setToolTipText("Launch Weka GUI chooser");
+
+		//@author ALEXIS BARLTROP
+		loadROIButton = new JButton("Load ROI from file");
+		loadROIButton.setToolTipText("Load ROI from custom coordinates");
 
 		showColorOverlay = false;
 	}
@@ -426,6 +430,30 @@ public class Weka_Segmentation implements PlugIn
 						record(LAUNCH_WEKA, arg);
 						launchWeka();
 					}
+
+					//@author ALEXIS BARLTROP
+					//TODO Add checking for correct coordinate file.
+					else if(e.getSource() == loadROIButton){
+						//Put roi select method in here.
+
+						int returnValue = fc.showOpenDialog(win);
+						if(returnValue == JFileChooser.APPROVE_OPTION) {
+							File coordinateFile = fc.getSelectedFile();
+
+							JOptionPane.showMessageDialog(win, "Loaded " + coordinateFile.getName());
+							try{
+								Roi fileRegion = convertCoordinateToROI(coordinateFile);
+								JOptionPane.showMessageDialog(win, "Loaded " + fileRegion);
+
+							}catch(IOException e){
+								System.err.println("File cannot be found or handled properly");
+							}
+
+						}
+						win.updateButtonsEnabling();
+					}
+
+
 					else{
 						for(int i = 0; i < wekaSegmentation.getNumOfClasses(); i++)
 						{
@@ -449,6 +477,34 @@ public class Weka_Segmentation implements PlugIn
 			});
 		}
 	};
+
+	//@author Alexis Barltrop
+	private Roi convertCoordinateToROI(File coordinateFile) throws IOException {
+		//could use wc line count to create arrays.
+		Scanner scan = new Scanner(coordinateFile);
+		ArrayList<Integer> rows = new ArrayList<Integer>();
+		ArrayList<Integer> cols = new ArrayList<>();
+
+		while(scan.hasNextInt()) {
+			rows.add(scan.nextInt());
+			cols.add(scan.nextInt());
+		}
+		//Convert to array of ints
+		int[] rowsArray = new int[rows.size()];
+		int[] colsArray = new int[cols.size()];
+
+		for(int i = 0; i<rowsArray.length; i++){
+			rowsArray[i] = rows.get(i).intValue();
+			colsArray[i] = cols.get(i).intValue();
+		}
+
+		Roi result = new PointRoi(rowsArray, colsArray,rowsArray.length);
+
+
+		return result;
+	}
+
+
 	
 	/**
 	 * Item listener for the trace lists
@@ -654,7 +710,11 @@ public class Weka_Segmentation implements PlugIn
 			addClassButton.addActionListener(listener);
 			settingsButton.addActionListener(listener);
 			wekaButton.addActionListener(listener);
-			
+
+			//@author ALEXIS BARLTROP
+			/** Add ROI select button */
+			loadROIButton.addActionListener(listener);
+
 			// add especial listener if the training image is a stack
 			if(null != sliceSelector)
 			{
@@ -807,6 +867,9 @@ public class Weka_Segmentation implements PlugIn
 			optionsConstraints.insets = new Insets(5, 5, 6, 6);
 			optionsJPanel.setLayout(optionsLayout);
 
+			//@Alexis Barltrop
+			optionsJPanel.add(loadROIButton,optionsConstraints);
+			optionsConstraints.gridy++;
 			optionsJPanel.add(applyButton, optionsConstraints);
 			optionsConstraints.gridy++;
 			optionsJPanel.add(loadClassifierButton, optionsConstraints);
@@ -928,6 +991,9 @@ public class Weka_Segmentation implements PlugIn
 					addClassButton.removeActionListener(listener);
 					settingsButton.removeActionListener(listener);
 					wekaButton.removeActionListener(listener);
+
+					//@ALEXIS BARLTROP
+					loadROIButton.removeActionListener(listener);
 
 					// Set number of classes back to 2
 					wekaSegmentation.setNumOfClasses(2);					
@@ -1110,6 +1176,11 @@ public class Weka_Segmentation implements PlugIn
 			addClassButton.setEnabled(s);
 			settingsButton.setEnabled(s);
 			wekaButton.setEnabled(s);
+
+			//@ALEXIS BARLTROP
+			loadROIButton.setEnabled(s);
+
+
 			for(int i = 0 ; i < wekaSegmentation.getNumOfClasses(); i++)
 			{
 				exampleList[i].setEnabled(s);
@@ -1153,6 +1224,9 @@ public class Weka_Segmentation implements PlugIn
 				addClassButton.setEnabled(wekaSegmentation.getNumOfClasses() < WekaSegmentation.MAX_NUM_CLASSES);
 				settingsButton.setEnabled(true);
 				wekaButton.setEnabled(true);
+
+				//@ALEXIS BARLTROP
+				loadROIButton.setEnabled(true);
 
 				// Check if there are samples in any slice
 				boolean examplesEmpty = true;
