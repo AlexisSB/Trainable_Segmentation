@@ -52,11 +52,7 @@ import java.awt.event.WindowEvent;
 import java.awt.event.WindowListener;
 import java.io.*;
 import java.lang.reflect.Field;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Properties;
-import java.util.Scanner;
-import java.util.Vector;
+import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.zip.GZIPOutputStream;
@@ -297,7 +293,7 @@ public class Weka_Segmentation implements PlugIn
 
 		roiOverlay = new RoiListOverlay[WekaSegmentation.MAX_NUM_CLASSES];
 		
-		trainButton = new JButton("Train Corgis");
+		trainButton = new JButton("Train classifier");
 		trainButton.setToolTipText("Start training the classifier");
 
 		overlayButton = new JButton("Toggle overlay");
@@ -361,8 +357,6 @@ public class Weka_Segmentation implements PlugIn
 	 */
 	private ActionListener listener = new ActionListener() {
 
-		
-	
 		public void actionPerformed(final ActionEvent e) {
 
 			final String command = e.getActionCommand();
@@ -444,6 +438,17 @@ public class Weka_Segmentation implements PlugIn
 							try{
 								Roi fileRegion = convertCoordinateToROI(coordinateFile);
 								JOptionPane.showMessageDialog(win, "Loaded " + fileRegion);
+								displayImage.setRoi(fileRegion, false);
+
+								String[] classNames = new String[wekaSegmentation.getNumOfClasses()];
+								for(int i = 0; i < wekaSegmentation.getNumOfClasses(); i++)
+								{
+									classNames[i] = wekaSegmentation.getClassLabel(i);
+								}
+
+
+								Object selected = JOptionPane.showInputDialog(win,"Which Class Does This Belong To?","Selection", JOptionPane.DEFAULT_OPTION,null,classNames,"0");
+								addExamples(Arrays.binarySearch(classNames,selected.toString()),fileRegion);
 
 							}catch(IOException e){
 								System.err.println("File cannot be found or handled properly");
@@ -490,8 +495,10 @@ public class Weka_Segmentation implements PlugIn
 			cols.add(scan.nextInt());
 		}
 		//Convert to array of ints
+
 		int[] rowsArray = new int[rows.size()];
 		int[] colsArray = new int[cols.size()];
+		IJ.log("Row length: " + rowsArray.length);
 
 		for(int i = 0; i<rowsArray.length; i++){
 			rowsArray[i] = rows.get(i).intValue();
@@ -499,6 +506,8 @@ public class Weka_Segmentation implements PlugIn
 		}
 
 		Roi result = new PointRoi(rowsArray, colsArray,rowsArray.length);
+		IJ.log(result.toString());
+		//Roi result = new PolygonRoi(rowsArray, colsArray,rowsArray.length,Roi.POLYLINE);
 
 
 		return result;
@@ -1381,7 +1390,7 @@ public class Weka_Segmentation implements PlugIn
 		if (null == r)
 			return;
 
-		// IJ.log("Adding trace to list " + i);
+		 IJ.log("Adding trace to list " + i);
 		
 		final int n = displayImage.getCurrentSlice();
 	
@@ -1392,9 +1401,30 @@ public class Weka_Segmentation implements PlugIn
 		win.updateExampleLists();
 		// Record
 		String[] arg = new String[] {
-			Integer.toString(i), 
+			Integer.toString(i),
 			Integer.toString(n)	};
 		record(ADD_TRACE, arg);
+	}
+
+	//@Alexis Barltrop
+
+	private void addExamples(int i, Roi roi){
+		if(roi ==null) {
+			return;
+		}
+		final int n = displayImage.getCurrentSlice();
+
+		displayImage.killRoi();
+		wekaSegmentation.addExample(i,roi,n);
+		traceCounter[i]++;
+		win.drawExamples();
+		win.updateExampleLists();
+		// Record
+		String[] arg = new String[] {
+				Integer.toString(i),
+				Integer.toString(n)	};
+		record(ADD_TRACE, arg);
+
 	}
 
 

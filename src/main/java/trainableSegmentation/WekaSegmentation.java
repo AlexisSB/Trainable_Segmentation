@@ -34,6 +34,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
+import ij.gui.*;
 import org.scijava.vecmath.Point3f;
 
 import hr.irb.fastRandomForest.FastRandomForest;
@@ -41,10 +42,6 @@ import ij.IJ;
 import ij.ImagePlus;
 import ij.ImageStack;
 import ij.Prefs;
-import ij.gui.Line;
-import ij.gui.PolygonRoi;
-import ij.gui.Roi;
-import ij.gui.ShapeRoi;
 import ij.process.Blitter;
 import ij.process.ByteProcessor;
 import ij.process.FloatPolygon;
@@ -4427,7 +4424,11 @@ public class WekaSegmentation {
 					Roi r = examples[ sliceNum-1 ].get( classIndex ).get(j);
 
 					// For polygon rois we get the list of points
-					if( r instanceof PolygonRoi && r.getType() == Roi.FREELINE )
+					if(r instanceof PointRoi)
+					{
+						nl +=addPointSamples(trainingData,classIndex,sliceNum,r);
+					}
+					else if( r instanceof PolygonRoi && r.getType() == Roi.FREELINE )
 					{
 						if(r.getStrokeWidth() == 1)
 							nl += addThinFreeLineSamples(trainingData, classIndex,
@@ -4458,6 +4459,37 @@ public class WekaSegmentation {
 
 		return trainingData;
 	}
+
+	private int addPointSamples(final Instances trainingData, int classIndex,int sliceNum, Roi r)
+	{
+		int numInstances = 0;
+		Point[] points = r.getContainedPoints();
+		int[] x = new int[points.length];
+		int[] y  = new int[points.length];
+
+		final int n = points.length;
+
+		for (int i = 0; i<n; i++)
+		{
+			x[i] = (int) points[i].getX();
+			y[i] = (int) points[i].getY();
+		}
+
+		for (int i=0; i<n; i++)
+		{
+			double[] values = new double[featureStackArray.getNumOfFeatures()+1];
+
+			for (int z=1; z<=featureStackArray.getNumOfFeatures(); z++)
+				values[z-1] = featureStackArray.get(sliceNum-1).getProcessor(z).getPixelValue(x[i], y[i]);
+
+			values[featureStackArray.getNumOfFeatures()] = classIndex;
+			trainingData.add(new DenseInstance(1.0, values));
+			// increase number of instances for this class
+			numInstances ++;
+		}
+		return numInstances;
+	}
+
 
 	/**
 	 * Add training samples from a FreeRoi with thickness of 1 pixel
