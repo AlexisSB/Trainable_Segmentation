@@ -116,7 +116,7 @@ public class Weka_Segmentation implements PlugIn
 	public static final String PLUGIN_NAME = "Trainable Weka Segmentation";
 	/** plugin's current version */
 	public static final String PLUGIN_VERSION = "v" +
-		Weka_Segmentation.class.getPackage().getImplementationVersion();
+		FasciaMain.class.getPackage().getImplementationVersion();
 	
 	/** reference to the segmentation backend */
 	private WekaSegmentation wekaSegmentation = null;
@@ -337,7 +337,7 @@ public class Weka_Segmentation implements PlugIn
 		settingsButton.setToolTipText("Display settings dialog");
 
 		/** The Weka icon image */
-		ImageIcon icon = new ImageIcon(Weka_Segmentation.class.getResource("/trainableSegmentation/images/weka.png"));
+		ImageIcon icon = new ImageIcon(FasciaMain.class.getResource("/trainableSegmentation/images/weka.png"));
 		wekaButton = new JButton( icon );
 		wekaButton.setToolTipText("Launch Weka GUI chooser");
 
@@ -669,7 +669,7 @@ public class Weka_Segmentation implements PlugIn
 			// Remove the canvas from the window, to add it later
 			removeAll();
 
-			setTitle( Weka_Segmentation.PLUGIN_NAME + " " + Weka_Segmentation.PLUGIN_VERSION );
+			setTitle( FasciaMain.PLUGIN_NAME + " " + FasciaMain.PLUGIN_VERSION );
 
 			// Annotations panel
 			annotationsConstraints.anchor = GridBagConstraints.NORTHWEST;
@@ -1363,7 +1363,7 @@ public class Weka_Segmentation implements PlugIn
 		// The display image is a copy of the training image (single image or stack)
 		displayImage = trainingImage.duplicate();
 		displayImage.setSlice( trainingImage.getCurrentSlice() );
-		displayImage.setTitle( Weka_Segmentation.PLUGIN_NAME + " " + Weka_Segmentation.PLUGIN_VERSION );
+		displayImage.setTitle( FasciaMain.PLUGIN_NAME + " " + FasciaMain.PLUGIN_VERSION );
 
 		ij.gui.Toolbar.getInstance().setTool(ij.gui.Toolbar.FREELINE);
 
@@ -2579,7 +2579,7 @@ public class Weka_Segmentation implements PlugIn
 	 */
 	public static void record(String command, String... args) 
 	{
-		command = "call(\"trainableSegmentation.Weka_Segmentation." + command;
+		command = "call(\"trainableSegmentation.FasciaMain." + command;
 		for(int i = 0; i < args.length; i++)
 			command += "\", \"" + args[i];
 		command += "\");\n";
@@ -3338,5 +3338,5 @@ public class Weka_Segmentation implements PlugIn
 		}
 		return null;
 	}
-}// end of Weka_Segmentation class
+}// end of FasciaMain class
 

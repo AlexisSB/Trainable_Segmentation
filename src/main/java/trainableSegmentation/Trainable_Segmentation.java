@@ -2010,7 +2010,7 @@ public class Trainable_Segmentation implements PlugIn
 		final int rows = (int)Math.round(FeatureStack.availableFeatures.length/2.0);
 		gd.addCheckboxGroup(rows, 2, FeatureStack.availableFeatures, oldEnableFeatures);
 		
-		Weka_Segmentation.disableMissingFeatures(gd);
+		FasciaMain.disableMissingFeatures(gd);
 
 		if(loadedTrainingData != null)
 		{

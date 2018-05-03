@@ -254,7 +254,7 @@ public class FeatureStack
 	 * Initialize empty feature stack. Features can be added later
 	 * using the <code>setStack</code> method. Use this method if
 	 * you want to use your own features (not compatible with the
-	 * <code>Weka_Segmentation</code> GUI). 
+	 * <code>FasciaMain</code> GUI).
 	 * 
 	 * @param width image width
 	 * @param height image height

@@ -10,10 +10,10 @@
 	</parent>
 
 	<groupId>sc.fiji</groupId>
-	<artifactId>Trainable_Segmentation</artifactId>
-	<version>3.2.23</version>
+	<artifactId>Fascia_Plugin</artifactId>
+	<version>0.0.1</version>
 
-	<name>Trainable Segmentation</name>
+	<name>Fascia_Plugin</name>
 	<description>Trainable Segmentation plugin for Fiji.</description>
 	<url>https://imagej.net/Trainable_Segmentation</url>
 	<inceptionYear>2010</inceptionYear>
