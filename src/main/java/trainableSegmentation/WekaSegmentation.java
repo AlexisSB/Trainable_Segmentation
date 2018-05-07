@@ -378,6 +378,10 @@ public class WekaSegmentation {
 		examples[n-1].get(classNum).add(roi);
 	}
 
+	public void hideExamples(int classNum){
+
+	}
+
 	/**
 	 * Remove an example list from a class and specific slice
 	 *

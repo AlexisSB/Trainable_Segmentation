@@ -57,15 +57,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.zip.GZIPOutputStream;
 
-import javax.swing.BorderFactory;
-import javax.swing.ImageIcon;
-import javax.swing.JButton;
-import javax.swing.JFileChooser;
-import javax.swing.JFrame;
-import javax.swing.JOptionPane;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.SwingUtilities;
+import javax.swing.*;
 
 import weka.classifiers.AbstractClassifier;
 import weka.classifiers.Classifier;
@@ -185,6 +177,8 @@ public class Weka_Segmentation implements PlugIn
 	private java.awt.List[] exampleList = null;
 	/** array of buttons for adding each trace class */
 	private JButton [] addExampleButton = null;
+
+	private JCheckBox[] showClassCheckBox = null;
 	
 	// Macro recording constants (corresponding to  
 	// static method names to be called)
@@ -290,6 +284,7 @@ public class Weka_Segmentation implements PlugIn
 
 		exampleList = new java.awt.List[WekaSegmentation.MAX_NUM_CLASSES];
 		addExampleButton = new JButton[WekaSegmentation.MAX_NUM_CLASSES];
+		showClassCheckBox = new JCheckBox[WekaSegmentation.MAX_NUM_CLASSES];
 
 		roiOverlay = new RoiListOverlay[WekaSegmentation.MAX_NUM_CLASSES];
 		
@@ -472,6 +467,10 @@ public class Weka_Segmentation implements PlugIn
 								addExamples(i);
 								break;
 							}
+							if(e.getSource() == showClassCheckBox[i]){
+								//toggleClassOverlay(i);
+								break;
+							}
 						}
 						win.updateButtonsEnabling();
 					}
@@ -615,6 +614,10 @@ public class Weka_Segmentation implements PlugIn
 		
 		/** panel containing the annotations panel (right side of the GUI) */
 		private JPanel labelsJPanel = new JPanel();
+		private GridBagLayout boxCheckBoxes = new GridBagLayout();
+		private GridBagConstraints checkBoxConstraints = new GridBagConstraints();
+		private JPanel checkBoxJPanel = new JPanel();
+
 		/** Panel with class radio buttons and lists */
 		private JPanel annotationsPanel = new JPanel();
 		
@@ -696,16 +699,47 @@ public class Weka_Segmentation implements PlugIn
 
 				annotationsConstraints.insets = new Insets(0,0,0,0);
 
-				annotationsPanel.add( exampleList[i], annotationsConstraints );
-				annotationsConstraints.gridy++;
+				//annotationsPanel.add( exampleList[i], annotationsConstraints );
+				//annotationsConstraints.gridy++;
 			}
 
 			// Select first class
 			addExampleButton[0].setSelected(true);
 
-			// Add listeners
+			// Checkbox panel
+			checkBoxConstraints.anchor = GridBagConstraints.NORTHWEST;
+			checkBoxConstraints.fill = GridBagConstraints.HORIZONTAL;
+			checkBoxConstraints.gridheight = 1;
+			checkBoxConstraints.gridx = 0;
+			checkBoxConstraints.gridy = 0;
+
+			checkBoxJPanel.setBorder(BorderFactory.createTitledBorder("Show Labels"));
+			checkBoxJPanel.setLayout(boxCheckBoxes);
+
 			for(int i = 0; i < wekaSegmentation.getNumOfClasses(); i++)
+			{
+
+				showClassCheckBox[i] = new JCheckBox("Add to " + wekaSegmentation.getClassLabel(i));
+				showClassCheckBox[i].setToolTipText("Add markings of label '" + wekaSegmentation.getClassLabel(i) + "'");
+				showClassCheckBox[i].setSelected(true);
+				checkBoxConstraints.insets = new Insets(5, 5, 6, 6);
+
+				checkBoxJPanel.add( showClassCheckBox[i], checkBoxConstraints );
+				checkBoxConstraints.gridy++;
+
+				checkBoxConstraints.insets = new Insets(0,0,0,0);
+
+				//annotationsPanel.add( exampleList[i], annotationsConstraints );
+				//annotationsConstraints.gridy++;
+			}
+
+
+			// Add listeners
+			for(int i = 0; i < wekaSegmentation.getNumOfClasses(); i++) {
 				addExampleButton[i].addActionListener(listener);
+				showClassCheckBox[i].addActionListener(listener);
+			}
+
 			trainButton.addActionListener(listener);
 			overlayButton.addActionListener(listener);
 			resultButton.addActionListener(listener);
@@ -723,6 +757,10 @@ public class Weka_Segmentation implements PlugIn
 			//@author ALEXIS BARLTROP
 			/** Add ROI select button */
 			loadROIButton.addActionListener(listener);
+
+
+
+
 
 			// add especial listener if the training image is a stack
 			if(null != sliceSelector)
@@ -832,6 +870,8 @@ public class Weka_Segmentation implements PlugIn
 			labelsConstraints.gridx = 0;
 			labelsConstraints.gridy = 0;
 			labelsJPanel.add( annotationsPanel, labelsConstraints );
+			labelsConstraints.gridy++;
+			labelsJPanel.add(checkBoxJPanel,labelsConstraints);
 			
 			// Scroll panel for the label panel
 			scrollPanel = new JScrollPane( labelsJPanel );
@@ -1328,6 +1368,8 @@ public class Weka_Segmentation implements PlugIn
 		// check if the image should be process in 3D
 		if( arg.equals( "3D" ) )
 			isProcessing3D = true;
+
+
 
 		// instantiate segmentation backend
 		wekaSegmentation = new WekaSegmentation( isProcessing3D );

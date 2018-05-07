@@ -2,6 +2,7 @@ package trainableSegmentation;
 
 import fiji.util.gui.OverlayedImageCanvas;
 import ij.IJ;
+import ij.ImagePlus;
 import ij.gui.PointRoi;
 import ij.gui.Roi;
 
@@ -11,7 +12,9 @@ import java.util.Collections;
 import java.awt.*;
 import javax.swing.*;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Scanner;
+import java.util.Vector;
 
 public class RoiManager {
 
@@ -20,11 +23,42 @@ public class RoiManager {
      */
     private final Composite transparency050 = AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.50f);
 
-    int numOfClasses = 9;
+    private ArrayList<String> classLabels = new ArrayList<String>();
+    public static final int MAX_NUM_CLASSES = 9;
+    private int numOfClasses = 9;
 
-    ArrayList<Roi>[] LabelTraces = new ArrayList[numOfClasses];
+    private ImagePlus displayImage;
 
-    public RoiManager(){
+    /** Vector index for slice
+     * Arraylist index for class
+     */
+    private Vector<ArrayList<Roi>>[] classRois;
+
+    public RoiManager(ImagePlus displayImage){
+
+
+        //Initialise class names
+        classLabels.add("Exterior");
+        classLabels.add("Inside");
+        classLabels.add("Bone");
+        classLabels.add("Skin");
+        classLabels.add("Artery");
+        classLabels.add("GM_Fascia");
+        classLabels.add("Tensor_Fasciae_Latae");
+        classLabels.add("Vastus_Lateralis");
+        classLabels.add("Iliac_Ligaments");
+
+        classRois = new  Vector[displayImage.getImageStackSize()];
+        for(int i=0; i< displayImage.getImageStackSize(); i++) {
+            classRois[i] = new Vector<ArrayList<Roi>>(numOfClasses);
+
+            for (int j = 0; j < numOfClasses; j++)
+                classRois[i].add(new ArrayList<Roi>());
+
+        }
+
+        this.displayImage = displayImage;
+
 
         // assign colors to classes
         Color[] colors = new Color[numOfClasses];
@@ -39,58 +73,100 @@ public class RoiManager {
         colors[7] = new Color(121, 235, 148);//Light Green
         colors[8] = new Color(0, 0, 255);//Blue
 
-        // add roi list overlays (one per class)
+       /* // add roi list overlays (one per class)
         for (int i = 0; i < WekaSegmentation.MAX_NUM_CLASSES; i++) {
             roiOverlay[i] = new RoiListOverlay();
             roiOverlay[i].setComposite(transparency050);
             ((OverlayedImageCanvas) ic).addOverlay(roiOverlay[i]);
-        }
+        }*/
     }
 
-    protected void addRoi(int classIndex, Roi selection){
-        LabelTraces[classIndex].add(selection);
+
+
+    /**
+     * Add new segmentation class.
+     */
+    public void addClass()
+    {
+        if(null != displayImage)
+            for(int i=1; i <= displayImage.getImageStackSize(); i++)
+                classRois[i-1].add(new ArrayList<Roi>());
+
+        // increase number of available classes
+        numOfClasses ++;
     }
 
-    protected ArrayList<Roi> getRoiList(int classIndex){
+    protected String getClassLabel(int classIndex) {
+        return classLabels.get(classIndex);
+    }
+
+    protected int getNumOfClasses(){
+        return numOfClasses;
+    }
+
+    protected void addRoi(int classIndex, Roi selection, int sliceIndex){
+        classRois[sliceIndex-1].get(classIndex).add(selection);
+    }
+
+    protected void deleteRoi(int classIndex, int sliceIndex, int roiIndex){
+        getRoiList(classIndex,sliceIndex).remove(roiIndex);
+    }
+
+    protected void setClassLabel(int classNum, String className){
+        classLabels.set(classNum,className);
+    }
+    /**
+     * Return the list of examples for a certain class.
+     *
+     * @param classNum the number of the examples' class
+     * @param slice the slice number
+     */
+    public List<Roi> getRoiList(int classNum, int slice)
+    {
+        return classRois[slice-1].get(classNum);
+    }
+
+
+    /*protected ArrayList<Roi> getRoiList(int classIndex){
         ArrayList<Roi> temp = new ArrayList<Roi>();
         Collections.copy(LabelTraces[classIndex],temp);
         return temp;
-    }
+    }*/
 
 
-    protected void drawExamples()
-        {
-            final int currentSlice = displayImage.getCurrentSlice();
-            for(int i = 0 ; i <numOfClasses;i++){
-                ArrayList<Roi> classLabels = getRoiList(i);
-                roiOverlay[i].setColor(colors[i]);
-            final ArrayList< Roi > rois = new ArrayList<Roi>();
-            for (Roi r : wekaSegmentation.getExamples(i, currentSlice))
-            {
-                rois.add(r);
-                //IJ.log("painted ROI: " + r + " in color "+ colors[i] + ", slice = " + currentSlice);
-            }
-            roiOverlay[i].setRoi(rois);
-        }
-
-        displayImage.updateAndDraw();
-    }
-
-    *//**
-     * Update the example lists in the GUI
-     *//*
-    protected void updateExampleLists()
-    {
-        final int currentSlice = displayImage.getCurrentSlice();
-
-        for(int i = 0; i < wekaSegmentation.getNumOfClasses(); i++)
-        {
-            exampleList[i].removeAll();
-            for(int j=0; j<wekaSegmentation.getExamples(i, currentSlice).size(); j++)
-                exampleList[i].add("trace " + j + " (Z=" + currentSlice+")");
-        }
-
-    }
+//    protected void drawExamples()
+//        {
+//            final int currentSlice = displayImage.getCurrentSlice();
+//            for(int i = 0 ; i <numOfClasses;i++){
+//                ArrayList<Roi> classLabels = getRoiList(i);
+//                roiOverlay[i].setColor(colors[i]);
+//            final ArrayList< Roi > rois = new ArrayList<Roi>();
+//            for (Roi r : wekaSegmentation.getExamples(i, currentSlice))
+//            {
+//                rois.add(r);
+//                //IJ.log("painted ROI: " + r + " in color "+ colors[i] + ", slice = " + currentSlice);
+//            }
+//            roiOverlay[i].setRoi(rois);
+//        }
+//
+//        displayImage.updateAndDraw();
+//    }
+//
+//    *//**
+//     * Update the example lists in the GUI
+//     *//*
+//    protected void updateExampleLists()
+//    {
+//        final int currentSlice = displayImage.getCurrentSlice();
+//
+//        for(int i = 0; i < wekaSegmentation.getNumOfClasses(); i++)
+//        {
+//            exampleList[i].removeAll();
+//            for(int j=0; j<wekaSegmentation.getExamples(i, currentSlice).size(); j++)
+//                exampleList[i].add("trace " + j + " (Z=" + currentSlice+")");
+//        }
+//
+//    }
 
     //@author Alexis Barltrop
     private Roi convertCoordinateToROI(File coordinateFile) throws IOException {
