@@ -213,5 +213,26 @@
 			<artifactId>junit</artifactId>
 			<scope>test</scope>
 		</dependency>
+
+		<!-- IJ-OpenCV dependencies -->
+		<dependency>
+			<groupId>io.github.joheras</groupId>
+			<artifactId>IJ-OpenCV</artifactId>
+			<version>1.0</version>
+		</dependency>
+
+		<!--Javacpp OpenCV dependency-->
+		<dependency>
+			<groupId>org.bytedeco.javacpp-presets</groupId>
+			<artifactId>opencv-platform</artifactId>
+			<version>3.4.1-1.4.1</version>
+		</dependency>
+		<dependency>
+			<groupId>org.bytedeco.javacpp-presets</groupId>
+			<artifactId>opencv</artifactId>
+			<version>3.4.1-1.4.1</version>
+			<classifier>macosx-x86_64-gpu</classifier>
+		</dependency>
 	</dependencies>
+
 </project>

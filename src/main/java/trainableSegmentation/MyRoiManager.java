@@ -5,6 +5,7 @@ import ij.IJ;
 import ij.ImagePlus;
 import ij.gui.PointRoi;
 import ij.gui.Roi;
+import ij.plugin.frame.RoiManager;
 
 import java.io.File;
 import java.io.IOException;
@@ -16,7 +17,7 @@ import java.util.List;
 import java.util.Scanner;
 import java.util.Vector;
 
-public class RoiManager {
+public class MyRoiManager{
 
     /**
      * 50% alpha composite
@@ -34,19 +35,19 @@ public class RoiManager {
      */
     private Vector<ArrayList<Roi>>[] classRois;
 
-    public RoiManager(ImagePlus displayImage){
+    public MyRoiManager(ImagePlus displayImage){
 
 
         //Initialise class names
-        classLabels.add("Exterior");
-        classLabels.add("Inside");
-        classLabels.add("Bone");
-        classLabels.add("Skin");
-        classLabels.add("Artery");
-        classLabels.add("GM_Fascia");
-        classLabels.add("Tensor_Fasciae_Latae");
-        classLabels.add("Vastus_Lateralis");
-        classLabels.add("Iliac_Ligaments");
+        classLabels.add("EXTERIOR");
+        classLabels.add("INSIDE");
+        classLabels.add("BONE");
+        classLabels.add("SKIN");
+        classLabels.add("ARTERY");
+        classLabels.add("GM_FASCIA");
+        classLabels.add("TENSOR_FASCIAE_LATAE");
+        classLabels.add("VASTUS_LATERALIS");
+        classLabels.add("ILIAC_LIGAMENTS");
 
         classRois = new  Vector[displayImage.getImageStackSize()];
         for(int i=0; i< displayImage.getImageStackSize(); i++) {

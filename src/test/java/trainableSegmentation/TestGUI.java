@@ -1,6 +1,7 @@
 package trainableSegmentation;
 
 import fiji.Debug;
+import ij.IJ;
 
 /**
  * Simple test to launch the plugin
@@ -20,7 +21,7 @@ public class TestGUI {
 	{		
 		// Call the plugin with empty arguments (this
 		// will pop up an Open dialog)		
-		Debug.run("Trainable Weka Segmentation", "");
-	}
+		Debug.runPlugIn("Fascia Segmentation", "",true);
+		}
 
-}
+		}

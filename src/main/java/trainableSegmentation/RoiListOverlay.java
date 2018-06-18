@@ -110,6 +110,13 @@ public class RoiListOverlay implements Overlay
 	{
 		this.roi = roi;
 	}
+
+	public ArrayList<Roi> getRoi(){
+		return this.roi;
+	}
+	public void killRoi(){
+		this.roi = null;
+	}
 	
 	public void setComposite (Composite composite)
 	{this.composite = composite;}
