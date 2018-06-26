@@ -27,7 +27,6 @@ import java.awt.Composite;
 import java.awt.Dimension;
 import java.awt.FileDialog;
 import java.awt.Frame;
-import java.awt.Graphics;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
@@ -42,7 +41,6 @@ import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
 import java.awt.event.ItemEvent;
 import java.awt.event.ItemListener;
-import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
 import java.awt.event.MouseWheelEvent;
@@ -50,14 +48,26 @@ import java.awt.event.MouseWheelListener;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.awt.event.WindowListener;
-import java.io.*;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.FilenameFilter;
+import java.io.ObjectOutputStream;
+import java.io.OutputStream;
 import java.lang.reflect.Field;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.zip.GZIPOutputStream;
 
-import javax.swing.*;
+import javax.swing.BorderFactory;
+import javax.swing.ImageIcon;
+import javax.swing.JButton;
+import javax.swing.JFileChooser;
+import javax.swing.JFrame;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.SwingUtilities;
 
 import weka.classifiers.AbstractClassifier;
 import weka.classifiers.Classifier;
@@ -108,7 +118,7 @@ public class Weka_Segmentation implements PlugIn
 	public static final String PLUGIN_NAME = "Trainable Weka Segmentation";
 	/** plugin's current version */
 	public static final String PLUGIN_VERSION = "v" +
-		FasciaMain.class.getPackage().getImplementationVersion();
+		Weka_Segmentation.class.getPackage().getImplementationVersion();
 	
 	/** reference to the segmentation backend */
 	private WekaSegmentation wekaSegmentation = null;
@@ -131,15 +141,15 @@ public class Weka_Segmentation implements PlugIn
 	private final ExecutorService exec = Executors.newFixedThreadPool(1);
 
 	/** train classifier button */
-	private JButton trainButton = null;
+	private JButton toggleOverlayButton = null;
 	/** toggle overlay button */
-	private JButton overlayButton = null;
+	private JButton resetOverlayButton = null;
 	/** create result button */
-	private JButton resultButton = null;
+	private JButton saveOverlayButton = null;
 	/** get probability maps button */
-	private JButton probabilityButton = null;
+	private JButton startScissorSelectButton = null;
 	/** plot result button */
-	private JButton plotButton = null;
+	private JButton stopScissorSelectButton = null;
 	/** apply classifier button */
 	private JButton applyButton = null;
 	/** load classifier button */
@@ -157,15 +167,12 @@ public class Weka_Segmentation implements PlugIn
 	/** create new class button */
 	private JButton addClassButton = null;
 
-	//@author ALEXIS BARLTROP
-	/** create load Region of Interest button */
-	private JButton loadROIButton = null;
-
-	public final JFileChooser fc = new JFileChooser();
-
 	/** array of roi list overlays to paint the transparent rois of each class */
 	private RoiListOverlay [] roiOverlay = null;
-	
+
+	/** Overlay for temporary path drawing*/
+	private RoiListOverlay temporaryOverlay = null;
+
 	/** available colors for available classes */
 	private Color[] colors = new Color[]{Color.red, Color.green, Color.blue,
 			Color.cyan, Color.magenta};
@@ -177,8 +184,6 @@ public class Weka_Segmentation implements PlugIn
 	private java.awt.List[] exampleList = null;
 	/** array of buttons for adding each trace class */
 	private JButton [] addExampleButton = null;
-
-	private JCheckBox[] showClassCheckBox = null;
 	
 	// Macro recording constants (corresponding to  
 	// static method names to be called)
@@ -189,7 +194,7 @@ public class Weka_Segmentation implements PlugIn
 	/** name of the macro method to train the current classifier */
 	public static final String TRAIN_CLASSIFIER = "trainClassifier";
 	/** name of the macro method to toggle the overlay image */
-	public static final String TOGGLE_OVERLAY = "toggleOverlay";
+	public static final String TOGGLE_OVERLAY = "toggleOverlayButton";
 	/** name of the macro method to get the binary result */
 	public static final String GET_RESULT = "getResult";
 	/** name of the macro method to get the probability maps */
@@ -240,6 +245,8 @@ public class Weka_Segmentation implements PlugIn
 
 	private boolean isProcessing3D = false;
 
+	private IntelligentScissors scissors = null;
+
 	/**
 	 * Basic constructor for graphical user interface use
 	 */
@@ -284,28 +291,30 @@ public class Weka_Segmentation implements PlugIn
 
 		exampleList = new java.awt.List[WekaSegmentation.MAX_NUM_CLASSES];
 		addExampleButton = new JButton[WekaSegmentation.MAX_NUM_CLASSES];
-		showClassCheckBox = new JCheckBox[WekaSegmentation.MAX_NUM_CLASSES];
 
 		roiOverlay = new RoiListOverlay[WekaSegmentation.MAX_NUM_CLASSES];
+
+		temporaryOverlay = new RoiListOverlay();
 		
-		trainButton = new JButton("Train classifier");
-		trainButton.setToolTipText("Start training the classifier");
+		toggleOverlayButton = new JButton("Toggle Overlay");
+		toggleOverlayButton.setToolTipText("Set the overlay to visible or not");
+		toggleOverlayButton.setEnabled(true);
 
-		overlayButton = new JButton("Toggle overlay");
-		overlayButton.setToolTipText("Toggle between current segmentation and original image");
-		overlayButton.setEnabled(false);
+		resetOverlayButton = new JButton("Reset overlay");
+		resetOverlayButton.setToolTipText("Remove all annotations from the current slice");
+		resetOverlayButton.setEnabled(true);
 
-		resultButton = new JButton("Create result");
-		resultButton.setToolTipText("Generate result image");
-		resultButton.setEnabled(false);
+		saveOverlayButton = new JButton("Save Overlay");
+		saveOverlayButton.setToolTipText("Generate 8 bit color image of overlay");
+		saveOverlayButton.setEnabled(true);
 
-		probabilityButton = new JButton("Get probability");
-		probabilityButton.setToolTipText("Generate current probability maps");
-		probabilityButton.setEnabled(false);
+		startScissorSelectButton = new JButton("Start Scissor Select");
+		startScissorSelectButton.setToolTipText("Start selection using the scissor tool");
+		startScissorSelectButton.setEnabled(true);
 
-		plotButton = new JButton("Plot result");
-		plotButton.setToolTipText("Plot result based on different metrics");
-		plotButton.setEnabled(false);
+		stopScissorSelectButton = new JButton("Plot result");
+		stopScissorSelectButton.setToolTipText("Plot result based on different metrics");
+		stopScissorSelectButton.setEnabled(false);
 		
 		applyButton = new JButton ("Apply classifier");
 		applyButton.setToolTipText("Apply current classifier to a single image or stack");
@@ -332,13 +341,9 @@ public class Weka_Segmentation implements PlugIn
 		settingsButton.setToolTipText("Display settings dialog");
 
 		/** The Weka icon image */
-		ImageIcon icon = new ImageIcon(FasciaMain.class.getResource("/trainableSegmentation/images/weka.png"));
+		ImageIcon icon = new ImageIcon(Weka_Segmentation.class.getResource("/trainableSegmentation/images/weka.png"));
 		wekaButton = new JButton( icon );
 		wekaButton.setToolTipText("Launch Weka GUI chooser");
-
-		//@author ALEXIS BARLTROP
-		loadROIButton = new JButton("Load ROI from file");
-		loadROIButton.setToolTipText("Load ROI from custom coordinates");
 
 		showColorOverlay = false;
 	}
@@ -346,256 +351,12 @@ public class Weka_Segmentation implements PlugIn
 	/** Thread that runs the training. We store it to be able to
 	 * to interrupt it from the GUI */
 	private Thread trainingTask = null;
-		
-	/**
-	 * Button listener
-	 */
-	private ActionListener listener = new ActionListener() {
-
-		public void actionPerformed(final ActionEvent e) {
-
-			final String command = e.getActionCommand();
-			
-			// listen to the buttons on separate threads not to block
-			// the event dispatch thread
-			exec.submit(new Runnable() {
-												
-				public void run()
-				{
-					if(e.getSource() == trainButton)
-					{
-						runStopTraining(command);						
-					}
-					else if(e.getSource() == overlayButton){
-						// Macro recording
-						String[] arg = new String[] {};
-						record(TOGGLE_OVERLAY, arg);
-						win.toggleOverlay();
-					}
-					else if(e.getSource() == resultButton){
-						// Macro recording
-						String[] arg = new String[] {};
-						record(GET_RESULT, arg);
-						showClassificationImage();
-					}
-					else if(e.getSource() == probabilityButton){
-						// Macro recording
-						String[] arg = new String[] {};
-						record(GET_PROBABILITY, arg);
-						showProbabilityImage();
-					}
-					else if(e.getSource() == plotButton){
-						// Macro recording
-						String[] arg = new String[] {};
-						record(PLOT_RESULT, arg);
-						plotResult();
-					}
-					else if(e.getSource() == applyButton){
-						applyClassifierToTestData();
-					}
-					else if(e.getSource() == loadClassifierButton){
-						loadClassifier();
-						win.updateButtonsEnabling();
-					}
-					else if(e.getSource() == saveClassifierButton){
-						saveClassifier();
-					}
-					else if(e.getSource() == loadDataButton){
-						loadTrainingData();
-					}
-					else if(e.getSource() == saveDataButton){
-						saveTrainingData();
-					}
-					else if(e.getSource() == addClassButton){
-						addNewClass();
-					}
-					else if(e.getSource() == settingsButton){
-						showSettingsDialog();
-						win.updateButtonsEnabling();
-					}
-					else if(e.getSource() == wekaButton){
-						// Macro recording
-						String[] arg = new String[] {};
-						record(LAUNCH_WEKA, arg);
-						launchWeka();
-					}
-
-					//@author ALEXIS BARLTROP
-					//TODO Add checking for correct coordinate file.
-					else if(e.getSource() == loadROIButton){
-						//Put roi select method in here.
-
-						int returnValue = fc.showOpenDialog(win);
-						if(returnValue == JFileChooser.APPROVE_OPTION) {
-							File coordinateFile = fc.getSelectedFile();
-
-							JOptionPane.showMessageDialog(win, "Loaded " + coordinateFile.getName());
-							try{
-								Roi fileRegion = convertCoordinateToROI(coordinateFile);
-								JOptionPane.showMessageDialog(win, "Loaded " + fileRegion);
-								displayImage.setRoi(fileRegion, false);
-
-								String[] classNames = new String[wekaSegmentation.getNumOfClasses()];
-								for(int i = 0; i < wekaSegmentation.getNumOfClasses(); i++)
-								{
-									classNames[i] = wekaSegmentation.getClassLabel(i);
-								}
 
 
-								Object selected = JOptionPane.showInputDialog(win,"Which Class Does This Belong To?","Selection", JOptionPane.DEFAULT_OPTION,null,classNames,"0");
-								addExamples(Arrays.binarySearch(classNames,selected.toString()),fileRegion);
+	private ButtonListener listener = new ButtonListener();
 
-							}catch(IOException e){
-								System.err.println("File cannot be found or handled properly");
-							}
-
-						}
-						win.updateButtonsEnabling();
-					}
-
-
-					else{
-						for(int i = 0; i < wekaSegmentation.getNumOfClasses(); i++)
-						{
-							if(e.getSource() == exampleList[i])
-							{
-								deleteSelected(e);
-								break;
-							}
-							if(e.getSource() == addExampleButton[i])
-							{
-								addExamples(i);
-								break;
-							}
-							if(e.getSource() == showClassCheckBox[i]){
-								//toggleClassOverlay(i);
-								break;
-							}
-						}
-						win.updateButtonsEnabling();
-					}
-
-				}
-
-				
-			});
-		}
-	};
-
-	//@author Alexis Barltrop
-	private Roi convertCoordinateToROI(File coordinateFile) throws IOException {
-		//could use wc line count to create arrays.
-		Scanner scan = new Scanner(coordinateFile);
-		ArrayList<Integer> rows = new ArrayList<Integer>();
-		ArrayList<Integer> cols = new ArrayList<>();
-
-		while(scan.hasNextInt()) {
-			rows.add(scan.nextInt());
-			cols.add(scan.nextInt());
-		}
-		//Convert to array of ints
-
-		int[] rowsArray = new int[rows.size()];
-		int[] colsArray = new int[cols.size()];
-		IJ.log("Row length: " + rowsArray.length);
-
-		for(int i = 0; i<rowsArray.length; i++){
-			rowsArray[i] = rows.get(i).intValue();
-			colsArray[i] = cols.get(i).intValue();
-		}
-
-		Roi result = new PointRoi(rowsArray, colsArray,rowsArray.length);
-		IJ.log(result.toString());
-		//Roi result = new PolygonRoi(rowsArray, colsArray,rowsArray.length,Roi.POLYLINE);
-
-
-		return result;
-	}
-
-
-	
-	/**
-	 * Item listener for the trace lists
-	 */
-	private ItemListener itemListener = new ItemListener() {
-		public void itemStateChanged(final ItemEvent e) {
-			exec.submit(new Runnable() {
-				public void run() {
-					for(int i = 0; i < wekaSegmentation.getNumOfClasses(); i++)
-					{
-						if(e.getSource() == exampleList[i])
-							listSelected(e, i);
-					}
-				}
-			});
-		}
-	};
-
-	/**
-	 * Custom canvas to deal with zooming an panning
-	 */
-	private class CustomCanvas extends OverlayedImageCanvas
-	{
-		/**
-		 * default serial version UID
-		 */
-		private static final long serialVersionUID = 1L;
-
-		CustomCanvas(ImagePlus imp)
-		{
-			super(imp);
-			Dimension dim = new Dimension(Math.min(512, imp.getWidth()), Math.min(512, imp.getHeight()));
-			setMinimumSize(dim);
-			setSize(dim.width, dim.height);
-			setDstDimensions(dim.width, dim.height);
-			addKeyListener(new KeyAdapter() {
-				public void keyReleased(KeyEvent ke) {
-					repaint();
-				}
-			});
-		}
-		//@Override
-		public void setDrawingSize(int w, int h) {}
-
-		public void setDstDimensions(int width, int height) {
-			super.dstWidth = width;
-			super.dstHeight = height;
-			// adjust srcRect: can it grow/shrink?
-			int w = Math.min((int)(width  / magnification), imp.getWidth());
-			int h = Math.min((int)(height / magnification), imp.getHeight());
-			int x = srcRect.x;
-			if (x + w > imp.getWidth()) x = w - imp.getWidth();
-			int y = srcRect.y;
-			if (y + h > imp.getHeight()) y = h - imp.getHeight();
-			srcRect.setRect(x, y, w, h);
-			repaint();
-		}
-
-		//@Override
-		public void paint(Graphics g) {
-			Rectangle srcRect = getSrcRect();
-			double mag = getMagnification();
-			int dw = (int)(srcRect.width * mag);
-			int dh = (int)(srcRect.height * mag);
-			g.setClip(0, 0, dw, dh);
-
-			super.paint(g);
-
-			int w = getWidth();
-			int h = getHeight();
-			g.setClip(0, 0, w, h);
-
-			// Paint away the outside
-			g.setColor(getBackground());
-			g.fillRect(dw, 0, w - dw, h);
-			g.fillRect(0, dh, w, h - dh);
-		}
-
-		public void setImagePlus(ImagePlus imp)
-		{
-			super.imp = imp;
-		}
-	}
+	private TraceListener traceListener = new TraceListener();
+	private MyRoiListener roiListener = new MyRoiListener();
 
 	/**
 	 * Custom window to define the Trainable Weka Segmentation GUI
@@ -614,10 +375,6 @@ public class Weka_Segmentation implements PlugIn
 		
 		/** panel containing the annotations panel (right side of the GUI) */
 		private JPanel labelsJPanel = new JPanel();
-		private GridBagLayout boxCheckBoxes = new GridBagLayout();
-		private GridBagConstraints checkBoxConstraints = new GridBagConstraints();
-		private JPanel checkBoxJPanel = new JPanel();
-
 		/** Panel with class radio buttons and lists */
 		private JPanel annotationsPanel = new JPanel();
 		
@@ -664,6 +421,9 @@ public class Weka_Segmentation implements PlugIn
 				((OverlayedImageCanvas)ic).addOverlay(roiOverlay[i]);
 			}
 
+			temporaryOverlay.setComposite( transparency050 );
+			((OverlayedImageCanvas)ic).addOverlay(temporaryOverlay);
+
 			// add result overlay
 			resultOverlay = new ImageOverlay();
 			resultOverlay.setComposite( overlayAlpha );
@@ -672,7 +432,7 @@ public class Weka_Segmentation implements PlugIn
 			// Remove the canvas from the window, to add it later
 			removeAll();
 
-			setTitle( FasciaMain.PLUGIN_NAME + " " + FasciaMain.PLUGIN_VERSION );
+			setTitle( Weka_Segmentation.PLUGIN_NAME + " " + Weka_Segmentation.PLUGIN_VERSION );
 
 			// Annotations panel
 			annotationsConstraints.anchor = GridBagConstraints.NORTHWEST;
@@ -688,7 +448,7 @@ public class Weka_Segmentation implements PlugIn
 			for(int i = 0; i < wekaSegmentation.getNumOfClasses(); i++)
 			{
 				exampleList[i].addActionListener(listener);
-				exampleList[i].addItemListener(itemListener);
+				exampleList[i].addItemListener(traceListener);
 				addExampleButton[i] = new JButton("Add to " + wekaSegmentation.getClassLabel(i));
 				addExampleButton[i].setToolTipText("Add markings of label '" + wekaSegmentation.getClassLabel(i) + "'");
 				
@@ -699,52 +459,21 @@ public class Weka_Segmentation implements PlugIn
 
 				annotationsConstraints.insets = new Insets(0,0,0,0);
 
-				//annotationsPanel.add( exampleList[i], annotationsConstraints );
-				//annotationsConstraints.gridy++;
+				annotationsPanel.add( exampleList[i], annotationsConstraints );
+				annotationsConstraints.gridy++;
 			}
 
 			// Select first class
 			addExampleButton[0].setSelected(true);
 
-			// Checkbox panel
-			checkBoxConstraints.anchor = GridBagConstraints.NORTHWEST;
-			checkBoxConstraints.fill = GridBagConstraints.HORIZONTAL;
-			checkBoxConstraints.gridheight = 1;
-			checkBoxConstraints.gridx = 0;
-			checkBoxConstraints.gridy = 0;
-
-			checkBoxJPanel.setBorder(BorderFactory.createTitledBorder("Show Labels"));
-			checkBoxJPanel.setLayout(boxCheckBoxes);
-
-			for(int i = 0; i < wekaSegmentation.getNumOfClasses(); i++)
-			{
-
-				showClassCheckBox[i] = new JCheckBox("Add to " + wekaSegmentation.getClassLabel(i));
-				showClassCheckBox[i].setToolTipText("Add markings of label '" + wekaSegmentation.getClassLabel(i) + "'");
-				showClassCheckBox[i].setSelected(true);
-				checkBoxConstraints.insets = new Insets(5, 5, 6, 6);
-
-				checkBoxJPanel.add( showClassCheckBox[i], checkBoxConstraints );
-				checkBoxConstraints.gridy++;
-
-				checkBoxConstraints.insets = new Insets(0,0,0,0);
-
-				//annotationsPanel.add( exampleList[i], annotationsConstraints );
-				//annotationsConstraints.gridy++;
-			}
-
-
 			// Add listeners
-			for(int i = 0; i < wekaSegmentation.getNumOfClasses(); i++) {
+			for(int i = 0; i < wekaSegmentation.getNumOfClasses(); i++)
 				addExampleButton[i].addActionListener(listener);
-				showClassCheckBox[i].addActionListener(listener);
-			}
-
-			trainButton.addActionListener(listener);
-			overlayButton.addActionListener(listener);
-			resultButton.addActionListener(listener);
-			probabilityButton.addActionListener(listener);
-			plotButton.addActionListener(listener);
+			toggleOverlayButton.addActionListener(listener);
+			resetOverlayButton.addActionListener(listener);
+			saveOverlayButton.addActionListener(listener);
+			startScissorSelectButton.addActionListener(listener);
+			stopScissorSelectButton.addActionListener(listener);
 			applyButton.addActionListener(listener);
 			loadClassifierButton.addActionListener(listener);
 			saveClassifierButton.addActionListener(listener);
@@ -754,14 +483,9 @@ public class Weka_Segmentation implements PlugIn
 			settingsButton.addActionListener(listener);
 			wekaButton.addActionListener(listener);
 
-			//@author ALEXIS BARLTROP
-			/** Add ROI select button */
-			loadROIButton.addActionListener(listener);
 
 
-
-
-
+			
 			// add especial listener if the training image is a stack
 			if(null != sliceSelector)
 			{
@@ -870,8 +594,6 @@ public class Weka_Segmentation implements PlugIn
 			labelsConstraints.gridx = 0;
 			labelsConstraints.gridy = 0;
 			labelsJPanel.add( annotationsPanel, labelsConstraints );
-			labelsConstraints.gridy++;
-			labelsJPanel.add(checkBoxJPanel,labelsConstraints);
 			
 			// Scroll panel for the label panel
 			scrollPanel = new JScrollPane( labelsJPanel );
@@ -892,15 +614,15 @@ public class Weka_Segmentation implements PlugIn
 			trainingConstraints.insets = new Insets(5, 5, 6, 6);
 			trainingJPanel.setLayout(trainingLayout);
 
-			trainingJPanel.add(trainButton, trainingConstraints);
+			trainingJPanel.add(toggleOverlayButton, trainingConstraints);
 			trainingConstraints.gridy++;
-			trainingJPanel.add(overlayButton, trainingConstraints);
+			trainingJPanel.add(resetOverlayButton, trainingConstraints);
 			trainingConstraints.gridy++;
-			trainingJPanel.add(resultButton, trainingConstraints);
+			trainingJPanel.add(saveOverlayButton, trainingConstraints);
 			trainingConstraints.gridy++;
-			trainingJPanel.add(probabilityButton, trainingConstraints);
+			trainingJPanel.add(startScissorSelectButton, trainingConstraints);
 			trainingConstraints.gridy++;
-			trainingJPanel.add(plotButton, trainingConstraints);
+			trainingJPanel.add(stopScissorSelectButton, trainingConstraints);
 			trainingConstraints.gridy++;
 
 			// Options panel
@@ -916,9 +638,6 @@ public class Weka_Segmentation implements PlugIn
 			optionsConstraints.insets = new Insets(5, 5, 6, 6);
 			optionsJPanel.setLayout(optionsLayout);
 
-			//@Alexis Barltrop
-			optionsJPanel.add(loadROIButton,optionsConstraints);
-			optionsConstraints.gridy++;
 			optionsJPanel.add(applyButton, optionsConstraints);
 			optionsConstraints.gridy++;
 			optionsJPanel.add(loadClassifierButton, optionsConstraints);
@@ -1027,11 +746,11 @@ public class Weka_Segmentation implements PlugIn
 					
 					for(int i = 0; i < wekaSegmentation.getNumOfClasses(); i++)
 						addExampleButton[i].removeActionListener(listener);
-					trainButton.removeActionListener(listener);
-					overlayButton.removeActionListener(listener);
-					resultButton.removeActionListener(listener);
-					probabilityButton.removeActionListener(listener);
-					plotButton.removeActionListener(listener);
+					toggleOverlayButton.removeActionListener(listener);
+					resetOverlayButton.removeActionListener(listener);
+					saveOverlayButton.removeActionListener(listener);
+					startScissorSelectButton.removeActionListener(listener);
+					stopScissorSelectButton.removeActionListener(listener);
 					applyButton.removeActionListener(listener);
 					loadClassifierButton.removeActionListener(listener);
 					saveClassifierButton.removeActionListener(listener);
@@ -1040,9 +759,6 @@ public class Weka_Segmentation implements PlugIn
 					addClassButton.removeActionListener(listener);
 					settingsButton.removeActionListener(listener);
 					wekaButton.removeActionListener(listener);
-
-					//@ALEXIS BARLTROP
-					loadROIButton.removeActionListener(listener);
 
 					// Set number of classes back to 2
 					wekaSegmentation.setNumOfClasses(2);					
@@ -1165,7 +881,7 @@ public class Weka_Segmentation implements PlugIn
 			exampleList[classNum].setForeground(colors[classNum]);
 
 			exampleList[classNum].addActionListener(listener);
-			exampleList[classNum].addItemListener(itemListener);
+			exampleList[classNum].addItemListener(traceListener);
 			addExampleButton[classNum] = new JButton("Add to " + wekaSegmentation.getClassLabel(classNum));
 
 			annotationsConstraints.fill = GridBagConstraints.HORIZONTAL;
@@ -1212,11 +928,11 @@ public class Weka_Segmentation implements PlugIn
 		 */
 		protected void setButtonsEnabled(boolean s)
 		{
-			trainButton.setEnabled(s);
-			overlayButton.setEnabled(s);
-			resultButton.setEnabled(s);
-			probabilityButton.setEnabled(s);
-			plotButton.setEnabled(s);
+			toggleOverlayButton.setEnabled(s);
+			resetOverlayButton.setEnabled(s);
+			saveOverlayButton.setEnabled(s);
+			startScissorSelectButton.setEnabled(s);
+			stopScissorSelectButton.setEnabled(s);
 			applyButton.setEnabled(s);
 			loadClassifierButton.setEnabled(s);
 			saveClassifierButton.setEnabled(s);
@@ -1225,11 +941,6 @@ public class Weka_Segmentation implements PlugIn
 			addClassButton.setEnabled(s);
 			settingsButton.setEnabled(s);
 			wekaButton.setEnabled(s);
-
-			//@ALEXIS BARLTROP
-			loadROIButton.setEnabled(s);
-
-
 			for(int i = 0 ; i < wekaSegmentation.getNumOfClasses(); i++)
 			{
 				exampleList[i].setEnabled(s);
@@ -1248,24 +959,24 @@ public class Weka_Segmentation implements PlugIn
 			if( trainingFlag )
 			{
 				setButtonsEnabled( false );
-				trainButton.setEnabled( true );	
+				toggleOverlayButton.setEnabled( true );
 			}
 			else // If the training is not going on
 			{
 				final boolean classifierExists =  null != wekaSegmentation.getClassifier();
 
-				trainButton.setEnabled( classifierExists );
+				toggleOverlayButton.setEnabled( classifierExists );
 				applyButton.setEnabled( win.trainingComplete );
 
 				final boolean resultExists = null != classifiedImage &&
 											 null != classifiedImage.getProcessor();
 
 				saveClassifierButton.setEnabled( win.trainingComplete );
-				overlayButton.setEnabled(resultExists);
-				resultButton.setEnabled( win.trainingComplete );
+				resetOverlayButton.setEnabled(resultExists);
+				saveOverlayButton.setEnabled( win.trainingComplete );
 				
-				plotButton.setEnabled( win.trainingComplete );				
-				probabilityButton.setEnabled( win.trainingComplete );
+				stopScissorSelectButton.setEnabled( win.trainingComplete );
+				startScissorSelectButton.setEnabled( win.trainingComplete );
 
 				loadClassifierButton.setEnabled(true);
 				loadDataButton.setEnabled(true);
@@ -1273,9 +984,6 @@ public class Weka_Segmentation implements PlugIn
 				addClassButton.setEnabled(wekaSegmentation.getNumOfClasses() < WekaSegmentation.MAX_NUM_CLASSES);
 				settingsButton.setEnabled(true);
 				wekaButton.setEnabled(true);
-
-				//@ALEXIS BARLTROP
-				loadROIButton.setEnabled(true);
 
 				// Check if there are samples in any slice
 				boolean examplesEmpty = true;
@@ -1369,8 +1077,6 @@ public class Weka_Segmentation implements PlugIn
 		if( arg.equals( "3D" ) )
 			isProcessing3D = true;
 
-
-
 		// instantiate segmentation backend
 		wekaSegmentation = new WekaSegmentation( isProcessing3D );
 		for(int i = 0; i < wekaSegmentation.getNumOfClasses() ; i++)
@@ -1401,11 +1107,12 @@ public class Weka_Segmentation implements PlugIn
 					"might take some time depending on your computer.\n");
 		
 		wekaSegmentation.setTrainingImage(trainingImage);
+		scissors.setImage(displayImage);
 		
 		// The display image is a copy of the training image (single image or stack)
 		displayImage = trainingImage.duplicate();
 		displayImage.setSlice( trainingImage.getCurrentSlice() );
-		displayImage.setTitle( FasciaMain.PLUGIN_NAME + " " + FasciaMain.PLUGIN_VERSION );
+		displayImage.setTitle( Weka_Segmentation.PLUGIN_NAME + " " + Weka_Segmentation.PLUGIN_VERSION );
 
 		ij.gui.Toolbar.getInstance().setTool(ij.gui.Toolbar.FREELINE);
 
@@ -1432,7 +1139,7 @@ public class Weka_Segmentation implements PlugIn
 		if (null == r)
 			return;
 
-		 IJ.log("Adding trace to list " + i);
+		// IJ.log("Adding trace to list " + i);
 		
 		final int n = displayImage.getCurrentSlice();
 	
@@ -1443,30 +1150,9 @@ public class Weka_Segmentation implements PlugIn
 		win.updateExampleLists();
 		// Record
 		String[] arg = new String[] {
-			Integer.toString(i),
+			Integer.toString(i), 
 			Integer.toString(n)	};
 		record(ADD_TRACE, arg);
-	}
-
-	//@Alexis Barltrop
-
-	private void addExamples(int i, Roi roi){
-		if(roi ==null) {
-			return;
-		}
-		final int n = displayImage.getCurrentSlice();
-
-		displayImage.killRoi();
-		wekaSegmentation.addExample(i,roi,n);
-		traceCounter[i]++;
-		win.drawExamples();
-		win.updateExampleLists();
-		// Record
-		String[] arg = new String[] {
-				Integer.toString(i),
-				Integer.toString(n)	};
-		record(ADD_TRACE, arg);
-
 	}
 
 
@@ -1574,13 +1260,13 @@ public class Weka_Segmentation implements PlugIn
 		if (command.equals("Train classifier")) 
 		{				
 			trainingFlag = true;
-			trainButton.setText("STOP");
+			toggleOverlayButton.setText("STOP");
 			final Thread oldTask = trainingTask;
 			// Disable rest of buttons until the training has finished
 			win.updateButtonsEnabling();
 
 			// Set train button text to STOP
-			trainButton.setText("STOP");							
+			toggleOverlayButton.setText("STOP");
 
 			// Thread to run the training
 			Thread newTask = new Thread() {								 
@@ -1638,7 +1324,7 @@ public class Weka_Segmentation implements PlugIn
 					finally
 					{
 						trainingFlag = false;						
-						trainButton.setText("Train classifier");
+						toggleOverlayButton.setText("Train classifier");
 						win.updateButtonsEnabling();										
 						trainingTask = null;
 					}
@@ -1657,7 +1343,7 @@ public class Weka_Segmentation implements PlugIn
 				win.trainingComplete = false;
 				IJ.log("Training was stopped by the user!");
 				win.setButtonsEnabled( false );
-				trainButton.setText("Train classifier");
+				toggleOverlayButton.setText("Train classifier");
 				
 				if(null != trainingTask)
 				{
@@ -2621,7 +2307,7 @@ public class Weka_Segmentation implements PlugIn
 	 */
 	public static void record(String command, String... args) 
 	{
-		command = "call(\"trainableSegmentation.FasciaMain." + command;
+		command = "call(\"trainableSegmentation.Weka_Segmentation." + command;
 		for(int i = 0; i < args.length; i++)
 			command += "\", \"" + args[i];
 		command += "\");\n";
@@ -2773,7 +2459,10 @@ public class Weka_Segmentation implements PlugIn
 			final ImagePlus probImage = wekaSegmentation.getClassifiedImage();
 			if(null != probImage)
 			{
-				probImage.setOpenAsHyperStack( true );				
+				probImage.setDimensions( wekaSegmentation.getNumOfClasses(),
+						win.getTrainingImage().getNSlices(), win.getTrainingImage().getNFrames() );
+				if( win.getTrainingImage().getNSlices() * win.getTrainingImage().getNFrames() > 1 )
+					probImage.setOpenAsHyperStack( true );
 				probImage.show();
 			}
 			win.updateButtonsEnabling();
@@ -3380,5 +3069,161 @@ public class Weka_Segmentation implements PlugIn
 		}
 		return null;
 	}
-}// end of FasciaMain class
 
+	private void updateScissorPath(){
+
+		PointRoi roi = (PointRoi) displayImage.getRoi();
+		IJ.log("Scissor User Selected Point \n " + Arrays.toString(roi.getContainedPoints()));
+		//Pull points from current roi
+		temporaryOverlay.setRoi(null);
+		if(roi.getContainedPoints().length < 2){
+			IJ.log("Point A");
+		}else{
+			//Add point to scissors
+			IJ.log("Point B");
+			PolygonRoi line = (PolygonRoi) scissors.drawShortestPath(roi.getContainedPoints());
+			line.setStrokeWidth(5);
+			IJ.log("Point C");
+			ArrayList<Roi> tempRoi = new ArrayList<Roi>();
+			tempRoi.add(line);
+			IJ.log("Point D");
+
+			temporaryOverlay.setColor(new Color(0, 255, 0));
+			temporaryOverlay.setRoi(tempRoi);
+			//Line deleted when path updated
+			//displayImage.setRoi(chosenPoints);
+			//win.getDisplayImage().setRoi(line,true);
+			//addExamples(4);
+
+		}
+		displayImage.updateAndDraw();
+
+	}
+
+	/**
+	 * Button listener
+	 */
+	private class ButtonListener implements ActionListener{
+
+		public void actionPerformed(final ActionEvent e) {
+
+			final String command = e.getActionCommand();
+
+			// listen to the buttons on separate threads not to block
+			// the event dispatch thread
+			exec.submit(new Runnable() {
+
+				public void run()
+				{
+					if(e.getSource() == toggleOverlayButton)
+					{
+						//runStopTraining(command);
+						// Macro recording
+						String[] arg = new String[] {};
+						record(TOGGLE_OVERLAY, arg);
+						win.toggleOverlay();
+					}
+					else if(e.getSource() == resetOverlayButton){
+
+						//win.resetOverlay()
+						//myRoiManager.resetRoi();
+						win.toggleOverlay();
+					}
+					else if(e.getSource() == saveOverlayButton){
+
+						//getLabelImage();
+
+					}
+					else if(e.getSource() == startScissorSelectButton){
+						exec.submit(new Runnable() {
+							@Override
+							public void run() {
+								//Reset visual elements
+								displayImage.killRoi();
+								scissors.reset();
+								scissors.setImage(win.getDisplayImage());
+								temporaryOverlay.setRoi(null);
+								displayImage.updateAndDraw();
+
+								IJ.log("Starting Scissor Select");
+								IJ.setTool("multipoint");
+								scissors.scissorActive = true;
+								stopScissorSelectButton.setEnabled(true);
+							}
+						});
+					}
+					else if(e.getSource() == stopScissorSelectButton){
+						//set scissor active to false
+					}else{
+						for(int i = 0; i < wekaSegmentation.getNumOfClasses(); i++)
+						{
+							if(e.getSource() == exampleList[i])
+							{
+								deleteSelected(e);
+								break;
+							}
+							if(e.getSource() == addExampleButton[i])
+							{
+								addExamples(i);
+								break;
+							}
+						}
+						win.updateButtonsEnabling();
+					}
+
+				}
+
+
+			});
+		}
+	}
+
+	/**
+	 * Item listener for the trace lists
+	 */
+	private class TraceListener implements ItemListener{
+		public void itemStateChanged(final ItemEvent e) {
+			exec.submit(new Runnable() {
+				public void run() {
+					for(int i = 0; i < wekaSegmentation.getNumOfClasses(); i++)
+					{
+						if(e.getSource() == exampleList[i])
+							listSelected(e, i);
+					}
+				}
+			});
+		}
+	}
+
+	private class MyRoiListener implements ij.gui.RoiListener{
+
+		@Override
+		public void roiModified(ImagePlus img, int id) {
+			String type = "UNKNOWN";
+			switch (id) {
+				case CREATED:
+					type="CREATED";
+					break;
+				case MOVED:
+					type="MOVED";
+					break;
+				case MODIFIED:
+					type="MODIFIED";
+					break;
+				case EXTENDED:
+					type="EXTENDED";
+					break;
+				case COMPLETED:
+					type="COMPLETED";
+					break;
+				case DELETED:
+					type="DELETED";
+					break;
+			}
+
+			IJ.log("ROI Modified: "+(img!=null?img.getTitle():"")+", "+type);
+
+		}
+	}
+
+}// end of Weka_Segmentation class

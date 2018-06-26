@@ -1,4 +1,6 @@
 package trainableSegmentation;
 
-public class CustomCanva {
+public class CustomFilter {
+
+
 }
